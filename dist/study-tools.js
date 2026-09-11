@@ -1,0 +1,6 @@
+import {escapeHtml as e} from './domain.js';
+export function dayNumber(date,start){return Math.round((Date.parse(date)-Date.parse(start))/86400000)+1;}
+export function dayLabel(date,start){return 'Dia '+String(dayNumber(date,start)).padStart(2,'0');}
+export function dayDate(day,start){if(!Number.isInteger(day)||day<1||day>365)throw Error('Escolha um dia entre 01 e 365.');return new Date(Date.parse(start)+(day-1)*86400000).toISOString().slice(0,10);}
+export function formattedText(text){return e(text).replace(/\*\*([^*\n]+)\*\*/g,'<strong>$1</strong>').replace(/__([^_\n]+)__/g,'<u>$1</u>').replace(/==([^=\n]+)==/g,'<mark>$1</mark>').replace(/\*([^*\n]+)\*/g,'<em>$1</em>').split('\n').map(line=>line.startsWith('- ')?'• '+line.slice(2):line).join('<br>');}
+export function syllabusSummary(topics,progress,studentId){return [...new Set(topics.map(t=>t.subject))].map(subject=>{const own=topics.filter(t=>t.subject===subject),keys=new Map(progress.filter(p=>p.student_id===studentId).map(p=>[p.key,p.flags]));const counts={study:0,summary:0,questions:0,review:0};const studied=[];for(const t of own){const f=keys.get('edital|'+[t.career,t.subject,t.code].join('|'))||{};for(const k of Object.keys(counts))if(f[k])counts[k]++;if(f.study)studied.push(t.title);}return {subject,total:own.length,...counts,studied};});}

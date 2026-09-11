@@ -31,7 +31,8 @@ export function validateCycle(blocks,topics){
  for(const b of blocks){
   if(!/^\d{4}-\d{2}-\d{2}$/.test(b.date)||!Number.isFinite(Date.parse(b.date))||new Date(b.date).toISOString().slice(0,10)!==b.date)throw Error('Confira as datas do ciclo.');
   if(!Number.isInteger(b.minutes)||b.minutes<1||b.minutes>960)throw Error('Informe de 1 a 960 minutos por bloco.');
-  if(!topics.some(t=>t.subject===b.subject&&syllabusKey(t)===b.topic_key&&t.title===b.topic))throw Error('Selecione um assunto do edital em cada bloco.');
+  const follows=b.topic_key==='follow'&&b.topic==='Seguir edital verticalizado'&&topics.some(t=>t.subject===b.subject);
+  if(!follows&&!topics.some(t=>t.subject===b.subject&&syllabusKey(t)===b.topic_key&&t.title===b.topic))throw Error('Selecione um assunto do edital em cada bloco.');
   const pair=b.date+'|'+b.subject;if(subjects.has(pair))throw Error('Escolha matérias diferentes em cada bloco do mesmo dia.');subjects.add(pair);
   totals.set(b.date,(totals.get(b.date)||0)+b.minutes);
  }

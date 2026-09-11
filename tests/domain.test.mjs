@@ -31,15 +31,34 @@ import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 import * as domain from '../dist/domain.js';
 import * as cyclePlan from '../dist/cycle-plan.js';
+import * as studyTools from '../dist/study-tools.js';
 test('login redesenha o painel mesmo quando o endereço já é painel/inicio',async()=>{
  const elements=new Map(),handlers={};
  const element=()=>({innerHTML:'',textContent:'',setAttribute(){},removeAttribute(){},remove(){},append(){}});
  const document={querySelector(key){if(!elements.has(key))elements.set(key,element());return elements.get(key);},addEventListener(type,fn){(handlers[type]??=[]).push(fn);},createElement:element};
  const profile={id:'admin-test',name:'Mentor',role:'admin',active:true,plan:'Estratégico',career:'CFO'};
- const context=vm.createContext({...domain,...cyclePlan,e:domain.escapeHtml,api:{configured:true,login:async()=>({id:profile.id}),list:async table=>table==='profiles'?[profile]:[]},document,location:{hash:'#painel/inicio'},window:{addEventListener(){}},setInterval(){},setTimeout(){},clearTimeout(){},FormData:class{constructor(){return new Map([['email','admin@example.invalid'],['password','fixture-only']]);}},crypto});
+ const context=vm.createContext({...domain,...cyclePlan,...studyTools,e:domain.escapeHtml,api:{configured:true,login:async()=>({id:profile.id}),list:async table=>table==='profiles'?[profile]:[]},document,location:{hash:'#painel/inicio'},window:{addEventListener(){}},setInterval(){},setTimeout(){},clearTimeout(){},FormData:class{constructor(){return new Map([['email','admin@example.invalid'],['password','fixture-only']]);}},crypto});
  const source=readFileSync(new URL('../dist/app.js',import.meta.url),'utf8').replace(/^import .*;\n/gm,'').replace(/^boot\(\);$/m,'');
  vm.runInContext(source,context);
  await handlers.submit[0]({preventDefault(){},target:{id:'auth-form',dataset:{mode:'login'},append(){}},submitter:element()});
  assert.match(elements.get('#app').innerHTML,/Alunos e acessos/);
  assert.match(elements.get('#content').innerHTML,/Sua mentoria, por inteiro/);
+});
+test('dias numerados preservam a sequência, inclusive virada do mês',()=>{
+ assert.equal(studyTools.dayLabel('2026-10-01','2026-09-30'),'Dia 02');
+ assert.equal(studyTools.dayDate(30,'2026-09-30'),'2026-10-29');
+ assert.throws(()=>studyTools.dayDate(0,'2026-09-30'));
+});
+test('seguir edital é uma opção válida somente para matéria do aluno',()=>{
+ const block={id:'a',date:'2026-09-11',subject:'Português',topic_key:'follow',topic:'Seguir edital verticalizado',minutes:60};
+ validateCycle([block],topicsFixture);
+ assert.throws(()=>validateCycle([{...block,subject:'Fora do edital'}],topicsFixture));
+});
+test('formatação escapa HTML e preserva negrito e destaque',()=>{
+ const text=studyTools.formattedText('**Regra** ==atenção== <script>alert(1)</script>');
+ assert.match(text,/<strong>Regra<\/strong>/);assert.match(text,/<mark>atenção<\/mark>/);assert.ok(!text.includes('<script>'));
+});
+test('panorama considera apenas as marcações do aluno selecionado',()=>{
+ const rows=studyTools.syllabusSummary(topicsFixture,[{student_id:'a',key:'edital|CFO|Português|1',flags:{study:true}},{student_id:'b',key:'edital|CFO|Português|2',flags:{study:true}}],'a');
+ assert.equal(rows[0].study,1);assert.deepEqual(rows[0].studied,['Ortografia']);
 });
