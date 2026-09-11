@@ -12,7 +12,7 @@ async function request(path,options={},retry=true){
  return data;
 }
 export async function login(email,password){const session=await request('/auth/v1/token?grant_type=password',{method:'POST',body:JSON.stringify({email,password})});setSession(session);return session.user;}
-export const signup=(email,password,name)=>request('/auth/v1/signup?redirect_to='+encodeURIComponent(location.origin+'/#login'),{method:'POST',body:JSON.stringify({email,password,data:{name}})});
+export const signup=(email,password,name)=>request('/auth/v1/signup',{method:'POST',body:JSON.stringify({email,password,data:{name}})});
 export const recover=email=>request('/auth/v1/recover?redirect_to='+encodeURIComponent(location.origin+'/#nova-senha'),{method:'POST',body:JSON.stringify({email})});
 export const changePassword=password=>request('/auth/v1/user',{method:'PUT',body:JSON.stringify({password})});
 export async function logout(){try{await request('/auth/v1/logout',{method:'POST'});}finally{clearSession();}}
