@@ -6,6 +6,10 @@ Plataforma estática para GitHub, Netlify e Sites, com dados e autenticação no
 
 - Ciclos de 1 a 365 dias, exibidos como Dia 01 em diante. Cada dia permite quantidade, matérias, minutos e observações próprios.
 - Assuntos vinculados ao edital do aluno ou opção “Seguir edital verticalizado”. Renovação e continuação criam ciclos separados e preservam o histórico.
+- Método editável por assunto: etapas, questões mínimas, prioridade, observações, material, vídeo e flashcard. Modelos podem ser aplicados a um aluno e ajustados antes de publicar.
+- Revisões em dias do ciclo após marcar Estudado, padrão +1, +3, +7 e +14. Resultados abaixo do limite configurado geram reforços. O mentor pode editar ou cancelar revisões pendentes.
+- Ciclo em colunas por dia, menu com rolagem e conteúdos organizados por matéria.
+- Impressão dos simulados com gabarito comentado no final. O aluno só acessa a correção, os comentários e a impressão depois de finalizar; o administrador pode preparar a impressão antes.
 - Panorama por aluno com estudo, resumo, questões, revisão e lista dos assuntos estudados.
 - Registro de questões externas com observações, desempenho e filtros.
 - Caderno de erros com edição, negrito, itálico, sublinhado, destaque e listas. A formatação é renderizada com HTML escapado.
@@ -38,6 +42,8 @@ Para uma instalação nova:
 
 ## Verificação
 
+`tests/study-method.sql` verifica criação e edição de revisões, idempotência, mínimos de questões, reforço, avanço por dia, isolamento dos alunos e proteção de gabaritos/impressão. Usa contas temporárias dentro de uma transação com rollback.
+
 `npm test` verifica ciclos, dias numerados, continuação, formatação segura, panorama e a regressão do login. `tests/mentor-controls.sql` verifica permissões, correção de simulados, comentários, observações e exclusões com rollback.
 
 `tests/accounts.integration.mjs` é executado explicitamente com a variável `MENTORIA_ADMIN_PASSWORD`. Cria e remove uma conta temporária para verificar cadastro sem e-mail, senha de oito caracteres, recuperação pelo mentor e exclusão. Não contém senhas reais.
@@ -45,8 +51,8 @@ Para uma instalação nova:
 ## Limites atuais
 
 - O gerador sugere uma distribuição determinística; o mentor define prioridades pedagógicas antes de publicar.
-- As datas continuam armazenadas internamente para a tarefa do dia e o calendário; a edição dos ciclos é apresentada por número do dia.
+- As datas dos blocos são identificadores internos da sequência. A tela e as revisões usam dias do ciclo, controlados pelo progresso do aluno, sem avanço automático por calendário. O aluno conclui as etapas e revisões pendentes para avançar.
 - A sessão fica em memória. Atualizar a página exige novo login. Os dados confirmados permanecem no Supabase.
-- O simulado exige a aba aberta e conectada até o envio. Não há retomada de tentativa nesta versão.
+- O simulado salva cada alternativa no servidor enquanto há conexão. Iniciar novamente retoma a tentativa pendente e o prazo original. Após o prazo, a correção usa apenas as alternativas salvas em tempo. Questões e comentários da correção são preservados na versão respondida, mesmo se o mentor editar o banco depois.
 - Contratação e entrega da nova senha são combinadas pelo WhatsApp. Não há cobrança automática nem importação automática de questões de terceiros.
 - Os editais são os arquivos fornecidos pelo mentor, sem atualização normativa automática.

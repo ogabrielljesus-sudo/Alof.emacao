@@ -34,11 +34,12 @@ import * as cyclePlan from '../dist/cycle-plan.js';
 import * as studyTools from '../dist/study-tools.js';
 test('login redesenha o painel mesmo quando o endereço já é painel/inicio',async()=>{
  const elements=new Map(),handlers={};
- const element=()=>({innerHTML:'',textContent:'',setAttribute(){},removeAttribute(){},remove(){},append(){}});
+ const element=()=>({innerHTML:'',textContent:'',dataset:{},setAttribute(){},removeAttribute(){},remove(){},append(){}});
  const document={querySelector(key){if(!elements.has(key))elements.set(key,element());return elements.get(key);},addEventListener(type,fn){(handlers[type]??=[]).push(fn);},createElement:element};
  const profile={id:'admin-test',name:'Mentor',role:'admin',active:true,plan:'Estratégico',career:'CFO'};
  const context=vm.createContext({...domain,...cyclePlan,...studyTools,e:domain.escapeHtml,api:{configured:true,login:async()=>({id:profile.id}),list:async table=>table==='profiles'?[profile]:[]},document,location:{hash:'#painel/inicio'},window:{addEventListener(){}},setInterval(){},setTimeout(){},clearTimeout(){},FormData:class{constructor(){return new Map([['email','admin@example.invalid'],['password','fixture-only']]);}},crypto});
- const source=readFileSync(new URL('../dist/app.js',import.meta.url),'utf8').replace(/^import .*;\n/gm,'').replace(/^boot\(\);$/m,'');
+ const uiSource=readFileSync(new URL('../dist/method-ui.js',import.meta.url),'utf8').replace(/^import .*;\n/gm,'').replace('export function createMethodUI','function createMethodUI');
+ const source=uiSource+'\n'+readFileSync(new URL('../dist/app.js',import.meta.url),'utf8').replace(/^import .*;\n/gm,'').replace(/^boot\(\);$/m,'');
  vm.runInContext(source,context);
  await handlers.submit[0]({preventDefault(){},target:{id:'auth-form',dataset:{mode:'login'},append(){}},submitter:element()});
  assert.match(elements.get('#app').innerHTML,/Alunos e acessos/);

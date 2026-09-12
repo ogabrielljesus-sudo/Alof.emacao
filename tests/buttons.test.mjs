@@ -6,8 +6,10 @@ import {readFileSync} from 'node:fs';
 import * as domain from '../dist/domain.js';
 import * as cycle from '../dist/cycle-plan.js';
 import * as study from '../dist/study-tools.js';
+import * as method from '../dist/study-method.js';
 const {parseHTML}=await import(process.env.BUTTON_QA_MODULE);
-const source=readFileSync(new URL('../dist/app.js',import.meta.url),'utf8').replace(/^import .*;\n/gm,'').replace(/^boot\(\);$/m,'');
+const uiSource=readFileSync(new URL('../dist/method-ui.js',import.meta.url),'utf8').replace(/^import .*;\n/gm,'').replace('export function createMethodUI','function createMethodUI');
+const source=uiSource+'\n'+readFileSync(new URL('../dist/app.js',import.meta.url),'utf8').replace(/^import .*;\n/gm,'').replace(/^boot\(\);$/m,'');
 const topics=[{career:'CFO',subject:'Português',code:'1',title:'Ortografia'}];
 const coverage=new Set();
 function setup(role='admin'){
@@ -26,9 +28,10 @@ function setup(role='admin'){
  const q={id:'question',subject:'Português',topic:'Ortografia',body:'Questão para teste',options:['A','B'],difficulty:'Média',year:2026};
  const tables={profiles,cycles:[{id:'cycle',student_id:'student',title:'Ciclo',notes:'',blocks,status:'Publicado',start_date:'2026-09-12'}],questions:[q],progress:[],study_logs:[],history:[],question_notes:[],resource_views:[],exam_attempts:[],password_requests:[],errors:[{id:'error',student_id:role==='admin'?'mentor':'student',subject:'Português',topic:'Ortografia',reason:'Desatenção',body:'Erro',explanation:'Rever',reviewed:false}],resources:[{id:'resource',title:'PDF',url:'https://example.com/file.pdf',kind:'Material',subject:'Português'}],exams:[{id:'exam',title:'Simulado 1',duration:10,question_ids:['question'],description:''}],question_comments:[{id:'comment',student_id:'student',question_id:'question',body:'Comentário',created_at:new Date().toISOString()}]};
  const calls=[];let failure=false,cancel=false;
- const api={configured:true,login:async()=>({id:role==='admin'?'mentor':'student'}),signup:async()=>({created:true}),recover:async()=>({message:'Pedido enviado ao administrador.'}),changePassword:async()=>{},clearSession(){},logout:async()=>{},list:async table=>tables[table]||[],save:async(table,data,id)=>{if(failure)throw Error('Falha de teste ao salvar');calls.push({table,data,id});return [{id:id||'new',...data}];},upsert:async(...args)=>api.save(...args),remove:async(table,id)=>{if(failure)throw Error('Falha de teste ao excluir');calls.push({table,id});tables[table]=tables[table].filter(x=>x.id!==id);},accountAction:async()=>({message:'Ação administrativa concluída.'}),rpc:async(name,args)=>{if(failure)throw Error('Falha de teste');calls.push({name,args});if(name==='save_question')return 'new-question';if(name==='start_exam')return {id:'attempt',deadline:new Date(Date.now()+600000).toISOString()};if(name==='submit_exam')return {score:1,total:1,details:[{question_id:'question',correct:true,correct_index:0,explanation:'Comentário do gabarito'}]};return {correct:true,correct_index:0,explanation:'Comentário do gabarito'};},upload:async()=> 'file',assetUrl:async()=> 'https://example.com/file.pdf'};
+ const api={configured:true,login:async()=>({id:role==='admin'?'mentor':'student'}),signup:async()=>({created:true}),recover:async()=>({message:'Pedido enviado ao administrador.'}),changePassword:async()=>{},clearSession(){},logout:async()=>{},list:async table=>tables[table]||[],save:async(table,data,id)=>{if(failure)throw Error('Falha de teste ao salvar');calls.push({table,data,id});return [{id:id||'new',...data}];},upsert:async(...args)=>api.save(...args),remove:async(table,id)=>{if(failure)throw Error('Falha de teste ao excluir');calls.push({table,id});tables[table]=tables[table].filter(x=>x.id!==id);},accountAction:async()=>({message:'Ação administrativa concluída.'}),rpc:async(name,args)=>{if(failure)throw Error('Falha de teste');calls.push({name,args});if(name==='save_question')return 'new-question';if(name==='get_exam_print')return {exam:tables.exams[0],questions:[{...q,correct_index:0,explanation:'Explicação para imprimir'}]};if(name==='start_exam')return {id:'attempt',deadline:new Date(Date.now()+600000).toISOString()};if(name==='submit_exam')return {score:1,total:1,details:[{question_id:'question',correct:true,correct_index:0,explanation:'Comentário do gabarito'}]};return {correct:true,correct_index:0,explanation:'Comentário do gabarito'};},upload:async()=> 'file',assetUrl:async()=> 'https://example.com/file.pdf'};
  class FormDataMock extends Map{constructor(form){super();this.all={};for(const el of form.querySelectorAll('input,select,textarea')){if(!el.name||el.disabled||['checkbox','radio'].includes(el.type)&&!el.checked)continue;const value=el.value||'';this.set(el.name,value);(this.all[el.name]??=[]).push(value);}}getAll(key){return this.all[key]||[];}}
- const context=vm.createContext({...domain,...cycle,...study,e:domain.escapeHtml,api,document,window,crypto,structuredClone,FormData:FormDataMock,location:{hash:'#painel/inicio',pathname:'/'},history:{pushState(_,__,url){context.location.hash=url;},replaceState(_,__,url){context.location.hash=url;}},confirm:()=>!cancel,setTimeout(){},clearTimeout(){},setInterval(){},queueMicrotask:fn=>fn(),console});
+ const context=vm.createContext({...domain,...cycle,...study,...method,e:domain.escapeHtml,api,document,window,crypto,structuredClone,FormData:FormDataMock,location:{hash:'#painel/inicio',pathname:'/'},history:{pushState(_,__,url){context.location.hash=url;},replaceState(_,__,url){context.location.hash=url;}},confirm:()=>!cancel,setTimeout(){},clearTimeout(){},setInterval(){},queueMicrotask:fn=>fn(),console});
+ window.print=()=>calls.push({name:'window.print'});
  window.open=()=>({opener:null,location:{href:'about:blank'},close(){}});
  vm.runInContext(source,context);context.fixture={tables,topics,profile:profiles[role==='admin'?0:1]};vm.runInContext('state.data=fixture.tables;state.topics=fixture.topics;state.profile=fixture.profile;shell();',context);
  const run=code=>vm.runInContext(code,context);
@@ -67,9 +70,34 @@ test('cadastro, login, recuperação, geração e publicação de simulado',asyn
  t.view('questoes');await t.click('open-question');const root=t.document.querySelector('#question-body');t.run('window.getSelection=()=>({rangeCount:1,isCollapsed:false,anchorNode:document.querySelector("#question-body").firstChild,focusNode:document.querySelector("#question-body").firstChild,getRangeAt:()=>({startContainer:document.querySelector("#question-body").firstChild,startOffset:0,toString:()=>"Questão",cloneRange:()=>({selectNodeContents(){},setEnd(){},toString:()=>""})}),removeAllRanges(){}})');assert.match(await t.click('highlight'),/grifado/);
 });
 test('botões do aluno, progresso, validação e bloqueio de pop-up',async()=>{
- const t=setup('student');t.view('ciclos');const checkbox=t.document.querySelector('[data-task]');checkbox.checked=true;for(const fn of t.events.change)await fn({target:checkbox});assert.match(t.document.querySelector('#notice').textContent,/Progresso/);
+ const t=setup('student');t.view('ciclos');assert.match(await t.click('open-study-task'),/Etapa/);assert.match(await t.submit('#method-step-form'),/Etapa concluída/);assert.ok(t.calls.some(c=>c.name==='record_method_action'));
  t.view('edital');const topic=t.document.querySelector('[data-edital]');topic.checked=true;for(const fn of t.events.change)await fn({target:topic});assert.match(t.document.querySelector('#notice').textContent,/Progresso/);
- t.view('materiais');t.run('window.open=()=>null');assert.match(await t.click('open-resource'),/bloqueou/);assert.equal(t.document.querySelector('#notice').getAttribute('data-kind'),'error');
+ t.view('materiais');assert.match(await t.click('select-resource'),/Conteúdo aberto/);assert.ok(t.document.querySelector('.lesson-content a[href="https://example.com/file.pdf"]'));
  for(const fn of t.events.invalid)fn({target:{validationMessage:'Preencha este campo.'}});assert.match(t.document.querySelector('#notice').textContent,/Preencha/);
+});
+test('edição do método preserva revisões, move o assunto e salva os valores no ciclo',async()=>{
+ const t=setup();t.view('ciclos');await t.click('edit-cycle');
+ assert.match(await t.click('edit-block-method'),/edição/);
+ assert.ok(t.document.querySelector('#method-editor-form'));
+ assert.match(await t.click('method-review-add'),/alterada/);
+ assert.equal(t.document.querySelectorAll('[data-review-index]').length,5);
+ assert.match(await t.click('method-review-remove',{index:'4'}),/alterada/);
+ assert.match(await t.click('method-step-add'),/alterada/);
+ assert.match(await t.click('method-step-up',{index:'2'}),/alterada/);
+ assert.match(await t.click('method-step-down',{index:'1'}),/alterada/);
+ assert.match(await t.click('method-step-remove',{index:'2'}),/alterada/);
+ assert.match(await t.submit('#method-editor-form',{initial_questions:'15',move_day:'2'}),/Método aplicado/);
+ assert.equal(t.run('state.draft[0].method.initial_questions'),15);
+ assert.equal(t.run('state.draft[0].date'),'2026-09-13');
+ await t.submit('#save-cycle');assert.equal(t.calls.find(c=>c.table==='cycles').data.blocks[0].method.initial_questions,15);
+});
+test('modelos, impressão, navegação dos dias e erros do servidor mostram confirmação',async()=>{
+ const t=setup();t.view('metodos');assert.match(await t.click('method-template-new'),/modelo aberto/);
+ assert.match(await t.submit('#method-editor-form',{name:'Modelo de teste'}),/Modelo de método salvo/);
+ assert.ok(t.calls.some(c=>c.table==='method_templates'&&c.data.name==='Modelo de teste'));
+ t.view('simulados');assert.match(await t.click('print-exam'),/preparada/);assert.match(await t.click('print-confirm'),/impressão aberta/);assert.ok(t.calls.some(c=>c.name==='window.print'));const paper=t.document.querySelector('#print-root').textContent;assert.ok(paper.indexOf('Questão para teste')<paper.indexOf('Gabarito comentado'));
+ const u=setup('student');u.view('ciclos');assert.match(await u.click('board-next'),/atualizados/);
+ assert.match(await u.click('board-current'),/atualizados/);
+ u.setFailure(true);assert.match(await u.click('advance-study-day'),/Falha/);assert.equal(u.document.querySelector('#notice').dataset.kind,'error');
 });
 test('inventário de controles revisados',()=>{console.log('Controles exercitados:',[...coverage].sort().join(', '));assert.ok(coverage.size>=48);});
