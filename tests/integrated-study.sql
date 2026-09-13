@@ -1,0 +1,78 @@
+begin;
+select set_config('qa.admin',gen_random_uuid()::text,true),set_config('qa.student',gen_random_uuid()::text,true),set_config('qa.other',gen_random_uuid()::text,true),set_config('qa.cycle',gen_random_uuid()::text,true);
+insert into auth.users(id,email,raw_user_meta_data) select current_setting(k)::uuid,'qa-'||current_setting(k)||'@example.invalid','{"name":"QA temporário"}'::jsonb from unnest(array['qa.admin','qa.student','qa.other']) k;
+update public.profiles set active=true,career='CFO',plan='Estratégico',role=case when id=current_setting('qa.admin')::uuid then 'admin' else 'student' end where id in (current_setting('qa.admin')::uuid,current_setting('qa.student')::uuid,current_setting('qa.other')::uuid);
+select set_config('qa.topic',(select key from public.syllabus_topics where career='CFO' order by key limit 1),true);
+select set_config('request.jwt.claim.sub',current_setting('qa.admin'),true);
+set local role authenticated;
+insert into public.cycles(id,student_id,title,status,start_date,duration_days,blocks) select current_setting('qa.cycle')::uuid,current_setting('qa.student')::uuid,'QA integração','Publicado','2026-01-01',8,jsonb_build_array(jsonb_build_object('id','b1','date','2026-01-01','subject',subject,'topic',title,'topic_key',key,'minutes',60,'method',jsonb_build_object('initial_questions',1,'reviews','[{"id":"r3","after":7,"questions":1}]'::jsonb,'steps','[{"id":"study","kind":"study","title":"Teoria"},{"id":"questions","kind":"questions","title":"Questões"},{"id":"summary","kind":"summary","title":"Resumo"},{"id":"flashcard","kind":"flashcard","title":"Flashcards"}]'::jsonb))) from public.syllabus_topics where key=current_setting('qa.topic');
+insert into public.flashcards(topic_key,front,back,review_keys) select current_setting('qa.topic'),'Pergunta '||n,'Resposta '||n,array['r3'] from generate_series(1,3)n;
+select set_config('qa.question',public.save_question('{"subject":"QA","topic":"QA","difficulty":"Média","body":"Enunciado original","options":["A","B"],"correct_index":0,"explanation":"Comentário"}')::text,true);
+with ex as(insert into public.exams(title,duration,question_ids,career) values('QA Soldado',10,array[current_setting('qa.question')::uuid],'Soldado') returning id) select set_config('qa.exam',id::text,true) from ex;
+reset role;
+select set_config('request.jwt.claim.sub',current_setting('qa.student'),true);
+set local role authenticated;
+do $$ declare x jsonb;begin
+ if exists(select 1 from public.flashcards) then raise exception 'Flashcards vazaram na primeira semana';end if;
+ if exists(select 1 from public.exams where id=current_setting('qa.exam')::uuid) then raise exception 'Aluno CFO leu simulado Soldado';end if;
+ begin perform public.start_exam(current_setting('qa.exam')::uuid);raise exception using errcode='XX000',message='Iniciou simulado de outro edital';exception when raise_exception then if sqlerrm not like '%outro edital%' then raise;end if;end;
+ begin insert into public.progress(student_id,key,flags) values(auth.uid(),current_setting('qa.cycle')||'|position','{"day":8}');raise exception using errcode='XX000',message='Adulterou posição';exception when raise_exception then if sqlerrm not like '%plano de estudos%' then raise;end if;end;
+ x:=public.study_timer(jsonb_build_object('action','create','cycle_id',current_setting('qa.cycle'),'block_id','b1','minutes',60,'focus',1,'rest',1));perform set_config('qa.session',x->>'id',true);
+ if x->>'status'<>'paused' then raise exception 'Relógio iniciou antes do comando';end if;
+ perform public.study_timer(jsonb_build_object('action','resume','session_id',current_setting('qa.session')));
+end;$$;
+reset role;
+update public.study_sessions set heartbeat_at=now()-interval '10 seconds' where id=current_setting('qa.session')::uuid;
+set local role authenticated;
+do $$ declare x jsonb;begin
+ x:=public.study_timer(jsonb_build_object('action','tick','session_id',current_setting('qa.session')));
+ if (x->>'focused_seconds')::numeric<>10 then raise exception 'Foco incorreto %',x;end if;
+ x:=public.study_timer(jsonb_build_object('action','tick','session_id',current_setting('qa.session')));
+ if (x->>'focused_seconds')::numeric<>10 then raise exception 'Contagem duplicada';end if;
+ perform public.study_timer(jsonb_build_object('action','pause','session_id',current_setting('qa.session')));
+ if (select count(*) from public.study_logs where session_id=current_setting('qa.session')::uuid)<>1 then raise exception 'Histórico de tempo duplicado';end if;
+ if (select sum(minutes) from public.study_logs where session_id=current_setting('qa.session')::uuid)<>0.17 then raise exception 'Tempo não integrado';end if;
+end;$$;
+reset role;
+update public.study_sessions set status='running',phase='break',phase_seconds=0,heartbeat_at=now()-interval '10 seconds' where id=current_setting('qa.session')::uuid;
+set local role authenticated;
+do $$ declare x jsonb;begin
+ x:=public.study_timer(jsonb_build_object('action','tick','session_id',current_setting('qa.session')));if (x->>'focused_seconds')::numeric<>10 then raise exception 'Descanso contou como estudo';end if;
+ perform public.study_timer(jsonb_build_object('action','end','session_id',current_setting('qa.session')));
+ perform public.record_method_action(jsonb_build_object('cycle_id',current_setting('qa.cycle'),'block_id','b1','action','step','step_id','study'));
+ perform public.record_method_action(jsonb_build_object('cycle_id',current_setting('qa.cycle'),'block_id','b1','action','step','step_id','summary'));
+ perform public.record_method_action(jsonb_build_object('cycle_id',current_setting('qa.cycle'),'block_id','b1','action','step','step_id','questions','total',2,'correct',1,'understanding','revisar','error_reason','Cálculo','notes','Rever exemplo'));
+ if not exists(select 1 from public.errors where student_id=auth.uid() and reason='Cálculo' and explanation='Rever exemplo') then raise exception 'Erro não integrado';end if;
+ if not exists(select 1 from public.progress where student_id=auth.uid() and key='edital|'||current_setting('qa.topic') and flags->>'summary'='true' and flags->>'questions'='true' and flags->>'study'='true') then raise exception 'Etapas não sincronizaram';end if;
+ if public.get_study_day(current_setting('qa.cycle')::uuid)->>'complete'<>'true' then raise exception 'Flashcards bloquearam primeira semana';end if;
+ if not exists(select 1 from public.cycle_days where cycle_id=current_setting('qa.cycle')::uuid and day=1 and completed_at is not null) then raise exception 'Conclusão do dia não registrada';end if;
+end;$$;
+-- Cancel reinforcement only in this isolated fixture.
+reset role;
+update public.method_reviews set status='cancelled' where cycle_id=current_setting('qa.cycle')::uuid and extra;
+set local role authenticated;
+do $$ declare x jsonb;rid uuid;n integer:=0;card jsonb;begin
+ for i in 1..7 loop x:=public.advance_method_day(current_setting('qa.cycle')::uuid);end loop;
+ if x->>'day'<>'8' then raise exception 'Não avançou no mesmo dia do calendário';end if;
+ if (select count(*) from public.flashcards where topic_key=current_setting('qa.topic'))<>3 then raise exception 'Flashcards não liberaram na segunda semana';end if;
+ select id into rid from public.method_reviews where cycle_id=current_setting('qa.cycle')::uuid and review_key='r3';
+ perform public.record_method_action(jsonb_build_object('action','review','review_id',rid,'total',1,'correct',1,'understanding','bem'));
+ begin perform public.advance_method_day(current_setting('qa.cycle')::uuid);raise exception using errcode='XX000',message='Avançou sem flashcards obrigatórios';exception when raise_exception then if sqlerrm not like '%pendentes%' then raise;end if;end;
+ x:=public.flash_action(jsonb_build_object('action','start','review_id',rid));perform set_config('qa.run',x->>'id',true);
+ for card in select * from jsonb_array_elements(x->'cards') loop n:=n+1;x:=public.flash_action(jsonb_build_object('action','answer','run_id',current_setting('qa.run'),'card_id',card->>'id','choice',case n when 1 then 'correct' when 2 then 'wrong' else 'forgot' end));end loop;
+ if x->>'completed_at' is null then raise exception 'Flashcards não concluíram';end if;
+ if not exists(select 1 from public.progress where student_id=auth.uid() and key='edital|'||current_setting('qa.topic') and flags->>'flashcards'='true' and flags->>'review'='true') then raise exception 'Flashcards ou revisão não sincronizados';end if;
+ if public.get_study_day(current_setting('qa.cycle')::uuid)->>'complete'<>'true' then raise exception 'Dia 08 não concluiu';end if;
+ if public.advance_method_day(current_setting('qa.cycle')::uuid)->>'finished'<>'true' then raise exception 'Ciclo final não concluiu';end if;
+end;$$;
+reset role;
+select set_config('request.jwt.claim.sub',current_setting('qa.other'),true);
+set local role authenticated;
+do $$ begin
+ if exists(select 1 from public.study_sessions where student_id=current_setting('qa.student')::uuid) then raise exception 'Sessão de outro aluno exposta';end if;
+ begin perform public.study_timer(jsonb_build_object('action','resume','session_id',current_setting('qa.session')));raise exception using errcode='XX000',message='Sessão alheia alterada';exception when raise_exception then if sqlerrm not like '%não encontrada%' then raise;end if;end;
+ if exists(select 1 from public.flashcard_runs where student_id=current_setting('qa.student')::uuid) then raise exception 'Flashcards alheios expostos';end if;
+end;$$;
+reset role;
+select 'PASS: timer, intervals, first week, cards, synchronization, daily advancement, history, errors, exam career and RLS' as result;
+rollback;

@@ -6,7 +6,7 @@ select set_config('request.jwt.claim.sub',current_setting('qa.admin'),true);
 set local role authenticated;
 insert into public.cycles(id,student_id,title,status,start_date,duration_days,blocks) values(current_setting('qa.cycle')::uuid,current_setting('qa.student')::uuid,'QA ciclo','Publicado','2026-01-01',30,'[{"id":"b1","date":"2026-01-01","subject":"Matemática","topic":"MMC e MDC","topic_key":"CFO|Matemática|1","minutes":60}]');
 select set_config('qa.question',public.save_question('{"subject":"QA","topic":"QA","difficulty":"Média","body":"Enunciado original","options":["A","B"],"correct_index":0,"explanation":"Comentário original"}')::text,true);
-with ex as(insert into public.exams(title,duration,question_ids) values('QA Simulado',10,array[current_setting('qa.question')::uuid]) returning id) select set_config('qa.exam',id::text,true) from ex;
+with ex as(insert into public.exams(title,duration,question_ids,career) values('QA Simulado',10,array[current_setting('qa.question')::uuid],'CFO') returning id) select set_config('qa.exam',id::text,true) from ex;
 insert into public.question_comments(question_id,student_id,body) values(current_setting('qa.question')::uuid,auth.uid(),'Comentário com gabarito');
 do $$ begin if jsonb_array_length(public.get_exam_print(current_setting('qa.exam')::uuid)->'questions')<>1 then raise exception 'Admin não imprimiu';end if;end;$$;
 reset role;

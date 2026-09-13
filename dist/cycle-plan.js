@@ -38,3 +38,14 @@ export function validateCycle(blocks,topics){
  }
  if([...totals.values()].some(n=>n>960))throw Error('Cada dia pode ter até 16 horas de estudo.');
 }
+// Append to the same cycle so existing block IDs, results and review schedules stay intact.
+export function extendCycle(cycle,days,topics,progress=[]){
+ const start=cycle.start_date||cycle.blocks.map(b=>b.date).sort()[0];
+ const relative=b=>Math.round((Date.parse(b.date)-Date.parse(start))/86400000)+1;
+ const length=Math.max(cycle.duration_days||1,...cycle.blocks.map(relative));
+ if(!Number.isInteger(days)||days<1||length+days>365)throw Error('A continuação deve manter o ciclo dentro de 365 dias.');
+ const alreadyScheduled=cycle.blocks.map(b=>({student_id:cycle.student_id,key:'edital|'+b.topic_key,flags:{study:true}}));
+ const pattern=[];for(let d=0;d<days;d++){const sourceDay=d%length+1;for(const b of cycle.blocks.filter(b=>relative(b)===sourceDay))pattern.push({...structuredClone(b),id:crypto.randomUUID(),date:new Date(Date.parse(start)+(length+d)*86400000).toISOString().slice(0,10)});}
+ const additional=assignTopics(pattern,topics,[...progress,...alreadyScheduled],cycle.student_id);
+ return {blocks:[...structuredClone(cycle.blocks),...additional],duration_days:length+days,first_day:length+1};
+}

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/configure-netlify.mjs",
-    "test": "node --test tests/domain.test.mjs tests/study-method.test.mjs",
-    "check": "node --check dist/app.js && node --check dist/api.js && node --check dist/domain.js && node --check dist/study-method.js && node --check dist/method-ui.js"
+    "test": "node --test tests/domain.test.mjs tests/study-method.test.mjs tests/integrated-study.test.mjs",
+    "check": "node --check dist/app.js && node --check dist/api.js && node --check dist/domain.js && node --check dist/study-method.js && node --check dist/method-ui.js && node --check dist/study-space.js && node --check dist/study-state.js && node --check dist/pdf-export.js && node --check dist/exports.js"
   }
 }

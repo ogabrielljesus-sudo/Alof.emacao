@@ -56,3 +56,18 @@ Para uma instalação nova:
 - O simulado salva cada alternativa no servidor enquanto há conexão. Iniciar novamente retoma a tentativa pendente e o prazo original. Após o prazo, a correção usa apenas as alternativas salvas em tempo. Questões e comentários da correção são preservados na versão respondida, mesmo se o mentor editar o banco depois.
 - Contratação e entrega da nova senha são combinadas pelo WhatsApp. Não há cobrança automática nem importação automática de questões de terceiros.
 - Os editais são os arquivos fornecidos pelo mentor, sem atualização normativa automática.
+
+## Estudo integrado (setembro de 2026)
+
+- O botão **Estudar** abre a escolha de duração e a tela do assunto. O Pomodoro salva o foco no servidor, separado dos intervalos. Iniciar, pausar, continuar e encerrar preservam a mesma sessão. Confirmações periódicas evitam somar o tempo duas vezes; desconexões pausam a contagem (com tolerância de até 30 segundos). A sessão é recuperada, pausada, após novo login.
+- Os registros de tempo usam `study_logs`, com `session_id` único. Questões externas podem selecionar o assunto exato do edital. Nas etapas iniciais, “Usar questões já registradas” aproveita resultados externos ou do banco, sem duplicar a contagem. Um motivo de erro informado gera a entrada no caderno do Estratégico.
+- O dia avança após todas as etapas e revisões obrigatórias. O aluno pode concluir vários dias no mesmo dia do calendário. `cycle_days` guarda início, conclusão e avanço; os totais vêm dos registros vinculados ao ciclo e ao dia.
+- Flashcards são conteúdo do Estratégico, vinculados a uma chave específica do edital. O mentor os cria na aba Flashcards, escolhe revisões e ativa o recurso no método do assunto. Primeira semana sem flashcards; do Dia 08 em diante, somente conteúdos já estudados (ou assim indicados pelo mentor). Acertos, erros e esquecimentos ficam no histórico e no panorama, separados dos totais de questões.
+- Estudo, questões, resumo, revisão e flashcards atualizam automaticamente as respectivas etapas do edital. Clicar no nome do assunto abre o histórico para aluno ou mentor.
+- **Continuar** reabre o mesmo ciclo no dia em que o aluno parou. **Acrescentar dias ao ciclo** repete sua distribuição de matérias e minutos e sugere os próximos tópicos, preservando identificadores e resultados existentes. Revise materiais e observações antes de publicar. **Renovar** continua criando um ciclo separado.
+- Simulados têm classificação CFO ou Soldado, validada no servidor ao iniciar ou exportar. Simulados antigos sem classificação ficam para o mentor escolher o edital. Nenhum existente foi classificado por suposição.
+- Exportações de ciclos, edital, desempenho, registros, erros, listas e simulados produzem PDFs com uma marca d’água diagonal por página. Simulados mantêm o gabarito comentado no final, liberado para alunos somente após entregar. PDFs e imagens dos materiais também recebem a marca ao baixar pela plataforma. Outros formatos e links sem permissão de leitura precisam de uma versão PDF enviada pelo mentor. A plataforma não oferece opção de remover a marca.
+
+Aplique, em ordem, as migrações posteriores a `20260912132048_study_method_and_exam_print.sql`. O projeto Supabase conectado já recebeu as migrações desta versão. Não coloque chaves secretas no código público.
+
+Validação: testes de domínio (`npm test`), controles de interface (`tests/buttons.test.mjs` com linkedom), transações com rollback (`tests/study-method.sql` e `tests/integrated-study.sql`), e verificação visual de PDF multipágina. Não substituem uma sessão manual em navegador real.

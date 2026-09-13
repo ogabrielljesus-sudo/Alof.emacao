@@ -22,7 +22,7 @@ export function validateMethod(c) {
   const reviewIds=new Set();
   for(const r of c.reviews){if(!r.id||reviewIds.has(r.id)||!Number.isInteger(r.after)||r.after<1||r.after>365||!Number.isInteger(r.questions)||r.questions<1||r.questions>500)throw Error('Confira os intervalos e as questões das revisões.');reviewIds.add(r.id);}
   if(!Array.isArray(c.steps)||!c.steps.length||c.steps.length>12)throw Error('Defina de 1 a 12 etapas para o assunto.');
-  const ids=new Set();for(const s of c.steps){if(!s.id||ids.has(s.id)||!['study','questions','flashcard','task'].includes(s.kind)||!s.title?.trim())throw Error('Confira os nomes e tipos das etapas.');ids.add(s.id);}
+  const ids=new Set();for(const s of c.steps){if(!s.id||ids.has(s.id)||!['study','questions','flashcard','task','summary'].includes(s.kind)||!s.title?.trim())throw Error('Confira os nomes e tipos das etapas.');ids.add(s.id);}
   return c;
 }
 export function performanceLevel(total,correct,c=DEFAULT_METHOD){

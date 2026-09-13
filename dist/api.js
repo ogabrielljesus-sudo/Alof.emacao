@@ -17,7 +17,7 @@ export const signup=(email,password,name)=>accountAction('signup',{email,passwor
 export const recover=email=>accountAction('request-reset',{email});
 export const changePassword=password=>request('/auth/v1/user',{method:'PUT',body:JSON.stringify({password})});
 export async function logout(){try{await request('/auth/v1/logout',{method:'POST'});}finally{clearSession();}}
-export const rpc=(name,args={})=>request('/rest/v1/rpc/'+name,{method:'POST',body:JSON.stringify(args)});
+export const rpc=(name,args={})=>request('/rest/v1/rpc/'+name,{method:'POST',body:JSON.stringify(args),keepalive:name==='study_timer'});
 export async function list(table,query=''){let out=[],offset=0;for(;;){const rows=await request(`/rest/v1/${table}?select=*&${query}&limit=1000&offset=${offset}`);out.push(...rows);if(rows.length<1000)return out;offset+=1000;}}
 export async function save(table,data,id){const rows=await request('/rest/v1/'+table+(id?'?id=eq.'+encodeURIComponent(id):''),{method:id?'PATCH':'POST',headers:{Prefer:'return=representation'},body:JSON.stringify(data)});if(!rows?.length)throw Error('Nenhum registro foi alterado. Verifique seu acesso e atualize a página.');return rows;}
 export const upsert=(table,data,conflict)=>request('/rest/v1/'+table+'?on_conflict='+conflict,{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=representation'},body:JSON.stringify(data)});
