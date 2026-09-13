@@ -8,13 +8,14 @@ Plataforma estática para GitHub, Netlify e Sites, com dados e autenticação no
 - Assuntos vinculados ao edital do aluno ou opção “Seguir edital verticalizado”. Renovação e continuação criam ciclos separados e preservam o histórico.
 - Método editável por assunto: etapas, questões mínimas, prioridade, observações, material, vídeo e flashcard. Modelos podem ser aplicados a um aluno e ajustados antes de publicar.
 - Revisões em dias do ciclo após marcar Estudado, padrão +1, +3, +7 e +14. Resultados abaixo do limite configurado geram reforços. O mentor pode editar ou cancelar revisões pendentes.
-- Ciclo em colunas por dia, menu com rolagem e conteúdos organizados por matéria.
+- Navegação guiada para o aluno: Hoje, Meu plano, Conteúdos, Revisões, Desempenho e Edital. No celular, os cinco destinos principais ficam fixos na parte inferior.
+- Ciclo em colunas por dia e conteúdos organizados por concurso, matéria, módulo, assunto e ordem recomendada.
 - Impressão dos simulados com gabarito comentado no final. O aluno só acessa a correção, os comentários e a impressão depois de finalizar; o administrador pode preparar a impressão antes.
 - Panorama por aluno com estudo, resumo, questões, revisão e lista dos assuntos estudados.
 - Registro de questões externas com observações, desempenho e filtros.
 - Caderno de erros com edição, negrito, itálico, sublinhado, destaque e listas. A formatação é renderizada com HTML escapado.
 - Simulados numerados, questões novas ou do banco, gabarito comentado, resultados e comentários compartilhados. O mentor pode moderar comentários e excluir simulados; as questões ficam no banco.
-- Materiais e vídeos, histórico e alertas de acompanhamento.
+- Materiais e vídeos dentro de módulos, com progresso por conteúdo, continuação do último item acessado e liberação por mês pago.
 - Básico: ciclos, edital, panorama, registros e desempenho. Estratégico: todos os recursos. Sem redação na plataforma.
 
 ## Contas
@@ -24,6 +25,8 @@ O cadastro usa a Edge Function `mentor-accounts`, que cria contas de aluno sem e
 “Esqueci a senha” registra um pedido no painel **Alunos e acessos**. O mentor verifica o aluno pelo contato conhecido e define uma nova senha, sem envio automático de mensagens. A função valida a sessão e o perfil administrativo no servidor.
 
 O administrador também pode excluir alunos. Há confirmação na interface; a exclusão remove a conta e os registros relacionados. Nenhuma conta administrativa pode ser excluída por essa função.
+
+O mentor controla a assinatura informando a data de início e **Pago até**. Alunos vencidos veem a orientação de renovação. Para o Estratégico, os conteúdos também podem indicar o mês de liberação; o sistema respeita o concurso do aluno e a quantidade de meses pagos. Uma data vazia mantém o acesso sem vencimento para cadastros especiais ou antigos.
 
 Cadastro e pedidos de recuperação têm limite de cinco tentativas por IP e e-mail em 15 minutos, armazenado no banco. As chaves de limitação são hashes. A chave privilegiada existe apenas no ambiente da função.
 
@@ -44,7 +47,7 @@ Para uma instalação nova:
 
 `tests/study-method.sql` verifica criação e edição de revisões, idempotência, mínimos de questões, reforço, avanço por dia, isolamento dos alunos e proteção de gabaritos/impressão. Usa contas temporárias dentro de uma transação com rollback.
 
-`npm test` verifica ciclos, dias numerados, continuação, formatação segura, panorama e a regressão do login. `tests/mentor-controls.sql` verifica permissões, correção de simulados, comentários, observações e exclusões com rollback.
+`npm test` verifica ciclos, dias numerados, continuação, formatação segura, panorama e a regressão do login. `tests/guided-learning.sql` verifica vencimento, renovação, concurso e liberação mensal dos módulos. `tests/mentor-controls.sql` verifica permissões, correção de simulados, comentários, observações e exclusões com rollback.
 
 `tests/accounts.integration.mjs` é executado explicitamente com a variável `MENTORIA_ADMIN_PASSWORD`. Cria e remove uma conta temporária para verificar cadastro sem e-mail, senha de oito caracteres, recuperação pelo mentor e exclusão. Não contém senhas reais.
 
