@@ -74,5 +74,21 @@ do $$ begin
  if exists(select 1 from public.flashcard_runs where student_id=current_setting('qa.student')::uuid) then raise exception 'Flashcards alheios expostos';end if;
 end;$$;
 reset role;
+-- Reusing platform/external results must neither duplicate counts nor discard a supplied error reason.
+select set_config('request.jwt.claim.sub',current_setting('qa.admin'),true);
+set local role authenticated;
+update public.cycles set blocks=blocks||jsonb_build_array(jsonb_build_object('id','b2','date','2026-01-08','subject',blocks->0->>'subject','topic',blocks->0->>'topic','topic_key',current_setting('qa.topic'),'minutes',30,'method',jsonb_build_object('initial_questions',1,'extra_enabled',false,'reviews','[]'::jsonb))) where id=current_setting('qa.cycle')::uuid;
+reset role;
+select set_config('request.jwt.claim.sub',current_setting('qa.student'),true);
+set local role authenticated;
+insert into public.study_logs(student_id,date,subject,topic,source,origin,total,correct,minutes,notes) select auth.uid(),(now() at time zone 'America/Bahia')::date,subject,title,'QA reutilização','external',2,1,0,'Rever o cálculo' from public.syllabus_topics where key=current_setting('qa.topic');
+do $$ declare before_count integer;begin
+ perform public.record_method_action(jsonb_build_object('cycle_id',current_setting('qa.cycle'),'block_id','b2','action','step','step_id','study'));
+ select sum(total) into before_count from public.study_logs where student_id=auth.uid();
+ perform public.record_method_action(jsonb_build_object('cycle_id',current_setting('qa.cycle'),'block_id','b2','action','step','step_id','questions','use_existing',true,'understanding','revisar','error_reason','Desatenção'));
+ if (select sum(total) from public.study_logs where student_id=auth.uid())<>before_count then raise exception 'Reutilização duplicou questões';end if;
+ if not exists(select 1 from public.errors where student_id=auth.uid() and source='QA reutilização' and reason='Desatenção') then raise exception 'Reutilização descartou motivo do erro';end if;
+end;$$;
+reset role;
 select 'PASS: timer, intervals, first week, cards, synchronization, daily advancement, history, errors, exam career and RLS' as result;
 rollback;
