@@ -35,7 +35,7 @@ import * as studyTools from '../dist/study-tools.js';
 test('login redesenha o painel mesmo quando o endereço já é painel/inicio',async()=>{
  const elements=new Map(),handlers={};
  const element=()=>({innerHTML:'',textContent:'',dataset:{},setAttribute(){},removeAttribute(){},remove(){},append(){}});
- const document={querySelector(key){if(!elements.has(key))elements.set(key,element());return elements.get(key);},addEventListener(type,fn){(handlers[type]??=[]).push(fn);},createElement:element};
+ const document={querySelector(key){if(!elements.has(key))elements.set(key,element());return elements.get(key);},querySelectorAll(){return [];},addEventListener(type,fn){(handlers[type]??=[]).push(fn);},createElement:element};
  const profile={id:'admin-test',name:'Mentor',role:'admin',active:true,plan:'Estratégico',career:'CFO'};
  const context=vm.createContext({...domain,...cyclePlan,...studyTools,createStudySpace:()=>({afterRender(){},submit:async()=>false,click:async()=>false}),createExports:()=>({controls(){},click:async()=>false}),e:domain.escapeHtml,api:{configured:true,login:async()=>({id:profile.id}),list:async table=>table==='profiles'?[profile]:[]},document,location:{hash:'#painel/inicio'},window:{addEventListener(){}},setInterval(){},setTimeout(){},clearTimeout(){},FormData:class{constructor(){return new Map([['email','admin@example.invalid'],['password','fixture-only']]);}},crypto});
  const uiSource=readFileSync(new URL('../dist/method-ui.js',import.meta.url),'utf8').replace(/^import .*;\n/gm,'').replace('export function createMethodUI','function createMethodUI');
