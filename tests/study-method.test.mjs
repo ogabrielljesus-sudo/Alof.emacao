@@ -3,16 +3,16 @@ import assert from 'node:assert/strict';
 import {methodConfig,validateMethod,performanceLevel,currentDay,cycleLength,examPrintHtml} from '../dist/study-method.js';
 
 test('limites de desempenho usam a proporção exata antes de arredondar',()=>{
- assert.equal(performanceLevel(10,8).label,'Evoluindo bem');
- assert.equal(performanceLevel(10,6).label,'Em atenção');
+ assert.equal(performanceLevel(10,8).label,'Bom desempenho');
+ assert.equal(performanceLevel(10,6).label,'Atenção');
  assert.equal(performanceLevel(1000,599).label,'Dificuldade');
- assert.equal(performanceLevel(10000,7999).label,'Em atenção');
+ assert.equal(performanceLevel(10000,7999).label,'Atenção');
  assert.equal(performanceLevel(0,0).rate,null);
- assert.equal(performanceLevel(10,6,{reinforce_below:70,good_from:90}).label,'Dificuldade');
+ assert.equal(performanceLevel(10,6,{reinforce_below:70,good_from:90}).label,'Atenção');
 });
 test('métodos são cópias independentes e aceitam intervalos e etapas personalizados',()=>{
  const a=methodConfig(),b=methodConfig();a.reviews[0].after=30;assert.equal(b.reviews[0].after,1);
- const c=methodConfig({reviews:[{id:'custom',after:30,questions:20}],flashcard:true});validateMethod(c);assert.equal(c.steps.at(-1).kind,'flashcard');
+ const c=methodConfig({reviews:[{id:'custom',after:30,questions:20}],flashcard:true});validateMethod(c);assert.ok(c.steps.every(s=>s.kind!=='flashcard'));assert.equal(c.flashcard,undefined);
  assert.throws(()=>validateMethod({...c,good_from:50}),/limite/);
  assert.throws(()=>validateMethod({...c,reviews:[{id:'x',after:0,questions:1}]}),/intervalos/);
 });

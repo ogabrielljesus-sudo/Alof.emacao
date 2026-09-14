@@ -4,13 +4,13 @@ import {dayNumber} from './study-tools.js';
 export const DEFAULT_METHOD = {
   initial_questions:10, reviews:[{id:'r1',after:1,questions:5},{id:'r2',after:3,questions:5},{id:'r3',after:7,questions:7},{id:'r4',after:14,questions:10}],
   reinforce_below:60, good_from:80, extra_enabled:true, extra_after:3, extra_questions:5,
-  priority:'Alta', studied_before:false, flashcard:false, resource_id:'', video_id:'', notes:'',
+  priority:'Alta', studied_before:false, resource_id:'', video_id:'', notes:'',
   steps:[{id:'study',kind:'study',title:'Estudar teoria'},{id:'questions',kind:'questions',title:'Resolver questões'}]
 };
 export function methodConfig(value={}) {
   const c={...structuredClone(DEFAULT_METHOD),...structuredClone(value||{})};
   c.steps=c.steps||structuredClone(DEFAULT_METHOD.steps);
-  if(c.flashcard&&!c.steps.some(s=>s.kind==='flashcard'))c.steps.push({id:'flashcard',kind:'flashcard',title:'Revisar flashcards do assunto'});
+  c.steps=c.steps.filter(s=>s.kind!=='flashcard');delete c.flashcard;c.reinforce_below=60;c.good_from=80;
   return c;
 }
 export function validateMethod(c) {
@@ -22,13 +22,13 @@ export function validateMethod(c) {
   const reviewIds=new Set();
   for(const r of c.reviews){if(!r.id||reviewIds.has(r.id)||!Number.isInteger(r.after)||r.after<1||r.after>365||!Number.isInteger(r.questions)||r.questions<1||r.questions>500)throw Error('Confira os intervalos e as questões das revisões.');reviewIds.add(r.id);}
   if(!Array.isArray(c.steps)||!c.steps.length||c.steps.length>12)throw Error('Defina de 1 a 12 etapas para o assunto.');
-  const ids=new Set();for(const s of c.steps){if(!s.id||ids.has(s.id)||!['study','questions','flashcard','task','summary'].includes(s.kind)||!s.title?.trim())throw Error('Confira os nomes e tipos das etapas.');ids.add(s.id);}
+  const ids=new Set();for(const s of c.steps){if(!s.id||ids.has(s.id)||!['study','questions','task','summary'].includes(s.kind)||!s.title?.trim())throw Error('Confira os nomes e tipos das etapas.');ids.add(s.id);}
   return c;
 }
 export function performanceLevel(total,correct,c=DEFAULT_METHOD){
   if(!total)return {rate:null,label:'Sem questões',color:''};
   const rate=correct/total*100;
-  return {rate:Math.round(rate*10)/10,label:rate<c.reinforce_below?'Dificuldade':rate<c.good_from?'Em atenção':'Evoluindo bem',color:rate<c.reinforce_below?'red':rate<c.good_from?'yellow':'green'};
+  return {rate:Math.round(rate*10)/10,label:rate<60?'Dificuldade':rate<80?'Atenção':'Bom desempenho',color:rate<60?'red':rate<80?'yellow':'green'};
 }
 export const cycleStart=c=>c.start_date||c.blocks.map(b=>b.date).sort()[0];
 export const blockDay=(b,c)=>dayNumber(b.date,cycleStart(c));

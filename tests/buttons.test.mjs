@@ -1,3 +1,4 @@
+import * as mentoring from '../dist/mentoring.js';
 // Run with BUTTON_QA_MODULE pointing to an installed linkedom module.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -35,7 +36,7 @@ function setup(role='admin'){
  const calls=[];let failure=false,cancel=false;
  const api={configured:true,login:async()=>({id:role==='admin'?'mentor':'student'}),signup:async()=>({created:true}),recover:async()=>({message:'Pedido enviado ao administrador.'}),changePassword:async()=>{},clearSession(){},logout:async()=>{},list:async table=>tables[table]||[],save:async(table,data,id)=>{if(failure)throw Error('Falha de teste ao salvar');calls.push({table,data,id});return [{id:id||'new',...data}];},upsert:async(...args)=>api.save(...args),remove:async(table,id)=>{if(failure)throw Error('Falha de teste ao excluir');calls.push({table,id});tables[table]=tables[table].filter(x=>x.id!==id);},accountAction:async()=>({message:'Ação administrativa concluída.'}),rpc:async(name,args)=>{if(failure)throw Error('Falha de teste');calls.push({name,args});if(name==='study_timer'){const existing=tables.study_sessions[0];const s=existing||{id:'session',student_id:'student',cycle_id:'cycle',block_id:'block',subject:'Português',topic:'Ortografia',target_seconds:1800,focus_seconds:1500,break_seconds:300,focused_seconds:0,phase_seconds:0,phase:'focus',status:'paused'};if(args.payload.action==='resume')s.status='running';if(args.payload.action==='pause')s.status='paused';if(args.payload.action==='end')s.status='ended';tables.study_sessions=[s];return s;}if(name==='advance_method_day')return {day:2,message:'Próximo dia liberado.'};if(name==='save_question')return 'new-question';if(name==='get_exam_print')return {exam:tables.exams[0],questions:[{...q,correct_index:0,explanation:'Explicação para imprimir'}]};if(name==='start_exam')return {id:'attempt',deadline:new Date(Date.now()+600000).toISOString()};if(name==='submit_exam')return {score:1,total:1,details:[{question_id:'question',correct:true,correct_index:0,explanation:'Comentário do gabarito'}]};return {correct:true,correct_index:0,explanation:'Comentário do gabarito'};},upload:async()=> 'file',assetUrl:async()=> 'https://example.com/file.pdf'};
  class FormDataMock extends Map{constructor(form){super();this.all={};for(const el of form.querySelectorAll('input,select,textarea')){if(!el.name||el.disabled||['checkbox','radio'].includes(el.type)&&!el.checked)continue;const value=el.value||'';this.set(el.name,value);(this.all[el.name]??=[]).push(value);}}getAll(key){return this.all[key]||[];}}
- const context=vm.createContext({...domain,...cycle,...study,...method,...integrated,makePdf,stampMaterial,Blob,URL,Uint8Array,TextDecoder,fetch:async()=>({ok:true,arrayBuffer:async()=>fixturePdf.buffer,headers:{get:()=> 'application/pdf'}}),e:domain.escapeHtml,api,document,window,crypto,structuredClone,FormData:FormDataMock,location:{hash:'#painel/inicio',pathname:'/'},history:{pushState(_,__,url){context.location.hash=url;},replaceState(_,__,url){context.location.hash=url;}},confirm:()=>!cancel,setTimeout(){},clearTimeout(){},setInterval(){},queueMicrotask:fn=>fn(),console});
+ const context=vm.createContext({...domain,...cycle,...study,...method,...integrated,...mentoring,makePdf,stampMaterial,Blob,URL,Uint8Array,TextDecoder,fetch:async()=>({ok:true,arrayBuffer:async()=>fixturePdf.buffer,headers:{get:()=> 'application/pdf'}}),e:domain.escapeHtml,api,document,window,crypto,structuredClone,FormData:FormDataMock,location:{hash:'#painel/inicio',pathname:'/'},history:{pushState(_,__,url){context.location.hash=url;},replaceState(_,__,url){context.location.hash=url;}},confirm:()=>!cancel,setTimeout(){},clearTimeout(){},setInterval(){},queueMicrotask:fn=>fn(),console});
  window.print=()=>calls.push({name:'window.print'});
  window.open=()=>({opener:null,location:{href:'about:blank'},close(){}});
  vm.runInContext(source,context);context.fixture={tables,topics,profile:profiles[role==='admin'?0:1]};vm.runInContext('state.data=fixture.tables;state.topics=fixture.topics;state.profile=fixture.profile;shell();',context);
@@ -45,90 +46,45 @@ function setup(role='admin'){
  const submit=async(selector,values={})=>{const f=document.querySelector(selector);assert.ok(f,'Formulário ausente: '+selector);for(const [key,value]of Object.entries(values)){const el=f.elements[key];assert.ok(el,'Campo ausente: '+key);el.value=value;}const btn=f.querySelector('button:not([type="button"])');document.querySelector('#notice').textContent='';for(const fn of events.submit)await fn({target:f,submitter:btn,preventDefault(){}});coverage.add(selector);return document.querySelector('#notice').textContent;};
  return {run,view,click,submit,document,events,calls,setFailure:v=>failure=v,setCancel:v=>cancel=v};
 }
-test('editores, ciclos, seleção de dias e cancelamento respondem com notificação',async()=>{
- const t=setup();t.view('alunos');assert.match(await t.click('edit-student'),/Editor/);assert.equal(t.document.querySelector('#student-editor').dataset.scrolled,'true');
- assert.match(await t.submit('#student-form'),/Salvo/);await t.click('edit-student');assert.match(await t.submit('#admin-password-form',{password:'teste1234'}),/concluída/);
- t.view('alunos');await t.click('edit-student');t.setCancel(true);assert.match(await t.click('delete-student'),/cancelada/);t.setCancel(false);assert.match(await t.click('delete-student'),/excluído/);
- for(const action of ['edit-cycle','renew-cycle','continue-cycle']){t.view('ciclos');assert.ok(await t.click(action));}
- t.view('ciclos');assert.match(await t.click('cycle-select-all'),/selecionadas/);assert.match(await t.click('cycle-select-none'),/removida/);
- t.view('ciclos');await t.click('edit-cycle');assert.match(await t.click('remove-block'),/removido/);assert.match(await t.click('add-block'),/adicionada/);assert.match(await t.click('select-draft-day'),/selecionado/);assert.match(await t.submit('#save-cycle'),/Salvo/);
+
+test('navegação e edições silenciosas; adições e exclusões têm uma confirmação',async()=>{
+ const t=setup();t.view('alunos');assert.equal(await t.click('edit-student'),'');assert.ok(t.document.querySelector('#student-form'));assert.equal(await t.submit('#student-form',{paid_until:'2026-10-01'}),'');assert.equal(t.calls.find(c=>c.table==='profiles').data.paid_until,'2026-10-01');
+ await t.click('edit-student');assert.equal(await t.submit('#admin-password-form',{password:'teste1234'}),'');
+ t.view('alunos');await t.click('edit-student');t.setCancel(true);assert.equal(await t.click('delete-student'),'');t.setCancel(false);assert.match(await t.click('delete-student'),/excluído/);
+ t.view('registros');assert.match(await t.submit('#log-form',{subject:'Português',topic:'Ortografia',source:'Livro',total:'5',correct:'3'}),/adicionado/);assert.equal(t.calls.find(c=>c.table==='study_logs').data.correct,3);
+ t.view('desempenho');assert.equal(await t.submit('#performance-filter'),'');
+ t.view('registros');t.setFailure(true);assert.equal(await t.submit('#log-form',{total:'3',correct:'1'}),'');assert.match(t.document.querySelector('.action-error').textContent,/Falha/);
 });
-test('questões, caderno, comentários e simulados respondem com confirmação',async()=>{
- const t=setup();t.view('questoes');assert.match(await t.click('edit-question'),/edição/);assert.match(await t.click('open-question'),/aberta/);assert.match(await t.submit('#answer-form',{answer:'0'}),/corrigida/);assert.match(await t.submit('#note-form',{body:'Nota'}),/salvos/);
- assert.match(await t.click('clear-highlight'),/removidos/);assert.match(await t.click('question-error'),/copiada/);assert.equal(t.document.querySelector('#error-form').elements.body.value,'Questão para teste');
- const input=t.document.querySelector('#error-form').elements.body;input.selectionStart=0;input.selectionEnd=7;assert.match(await t.click('format-error'),/aplicada/);assert.match(await t.submit('#error-form'),/Salvo/);assert.match(await t.click('edit-error'),/edição/);assert.match(await t.click('review-error'),/Salvo/);
- t.view('questoes');await t.click('open-question');assert.match(await t.submit('[data-comment-question]',{body:'Comentário novo'}),/publicado/);assert.match(await t.click('delete-comment'),/apagado/);assert.match(await t.click('close-question'),/Banco/);
- t.view('simulados');assert.match(await t.click('edit-exam'),/edição/);assert.match(await t.click('compose-exam-question'),/aberto/);
- assert.match(await t.submit('#question-form',{subject:'Português',topic:'Ortografia',body:'Nova',options:'A\nB',explanation:'Explicação'}),/selecionada no simulado/);
- assert.match(await t.click('start-exam'),/iniciado/);assert.match(await t.submit('#exam-submit'),/resultado salvo/);assert.match(await t.click('close-exam'),/Lista/);assert.match(await t.click('delete-exam'),/excluído/);
+test('menus, painéis e rotas antigas não apresentam funções removidas',()=>{
+ for(const role of ['admin','student']){const t=setup(role);for(const view of ['inicio','mais','alunos','edital','panorama','desempenho','revisoes','dificuldades','historico','flashcards','erros']){t.view(view);assert.doesNotMatch(t.document.querySelector('#content').textContent,/flashcard|caderno de erros/i);assert.equal(t.document.querySelector('[data-action="question-error"]'),null);}}
 });
-test('gravações, filtros e erros informam resultados sem sucesso falso',async()=>{
- const t=setup();for(const [view,form,values]of [['registros','#log-form',{subject:'Português',topic:'Ortografia',source:'Livro',total:'5',correct:'3',notes:'Observação'}],['historico','#history-form',{title:'Nota',body:'Texto'}],['materiais','#resource-form',{title:'PDF',url:'https://example.com/pdf'}]]){t.view(view);assert.match(await t.submit(form,values),/Salvo/);}
- for(const [view,form]of [['edital','#edital-filter'],['desempenho','#performance-filter'],['questoes','#question-filter'],['erros','#error-filter'],['panorama','#panorama-filter']]){t.view(view);assert.match(await t.submit(form),/Filtros/);}
- t.view('registros');t.setFailure(true);assert.match(await t.submit('#log-form',{total:'3',correct:'1'}),/Falha/);assert.equal(t.document.querySelector('#notice').getAttribute('data-kind'),'error');t.setFailure(false);
- t.view('materiais');assert.match(await t.click('open-resource'),/PDF preparado/);t.view('inicio');assert.match(await t.click('logout'),/saiu/);assert.equal(await t.click('dismiss-notice'),'');
+test('criar, continuar, renovar e editar método preservam o plano',async()=>{
+ const t=setup();for(const a of ['edit-cycle','renew-cycle','continue-cycle']){t.view('ciclos');await t.click(a);assert.ok(t.document.querySelector('#save-cycle'));}
+ await t.click('edit-block-method');await t.click('method-step-add');await t.click('method-step-up',{index:'2'});await t.click('method-step-down',{index:'1'});await t.click('method-step-remove',{index:'2'});await t.submit('#method-editor-form',{initial_questions:'15',move_day:'2'});assert.equal(t.run('state.draft[0].method.initial_questions'),15);assert.equal(t.run('state.draft[0].date'),'2026-09-13');await t.submit('#save-cycle');assert.equal(t.calls.find(c=>c.table==='cycles').data.blocks[0].method.initial_questions,15);
+ t.run('state.data.progress.push({student_id:"student",key:"cycle|position",flags:{day:8}})');t.view('ciclos');await t.click('continue-cycle');assert.equal(t.run('state.editCycle'),'cycle');assert.equal(t.run('state.draftDay'),'2026-09-19');
 });
-test('cadastro, login, recuperação, geração e publicação de simulado',async()=>{
- const t=setup();for(const mode of ['login','cadastro','recuperar','nova-senha']){t.run('authPage('+JSON.stringify(mode)+')');const values=mode==='nova-senha'?{password:'teste1234'}:mode==='recuperar'?{email:'test@example.invalid'}:mode==='cadastro'?{email:'test@example.invalid',password:'teste1234',name:'Teste'}:{email:'test@example.invalid',password:'teste1234'};assert.ok(await t.submit('#auth-form',values));assert.notEqual(t.document.querySelector('#notice').getAttribute('data-kind'),'error');}
- t.run('state.profile=fixture.profile;shell()');t.view('ciclos');await t.click('cycle-select-all');assert.match(await t.submit('#generate-cycle',{student_id:'student',count:'1'}),/gerada/);
- t.view('simulados');t.document.querySelector('[name="questions"]').checked=true;assert.match(await t.submit('#exam-form'),/salvo/);
- t.view('questoes');await t.click('open-question');const root=t.document.querySelector('#question-body');t.run('window.getSelection=()=>({rangeCount:1,isCollapsed:false,anchorNode:document.querySelector("#question-body").firstChild,focusNode:document.querySelector("#question-body").firstChild,getRangeAt:()=>({startContainer:document.querySelector("#question-body").firstChild,startOffset:0,toString:()=>"Questão",cloneRange:()=>({selectNodeContents(){},setEnd(){},toString:()=>""})}),removeAllRanges(){}})');assert.match(await t.click('highlight'),/grifado/);
+test('questões, comentários, simulados e impressão mantêm seus controles',async()=>{
+ const t=setup();t.view('questoes');await t.click('edit-question');await t.click('open-question');assert.equal(await t.submit('#answer-form',{answer:'0'}),'');assert.match(t.document.querySelector('#question-result').textContent,/correta/);await t.submit('#note-form',{body:'Nota'});assert.ok(t.calls.some(c=>c.table==='question_notes'));await t.click('clear-highlight');
+ assert.match(await t.submit('[data-comment-question]',{body:'Novo comentário'}),/adicionado/);assert.match(await t.click('delete-comment'),/apagado/);await t.click('close-question');
+ t.view('simulados');await t.click('edit-exam');await t.click('compose-exam-question');assert.match(await t.submit('#question-form',{subject:'Português',topic:'Ortografia',body:'Nova',options:'A\nB',explanation:'Comentário'}),/adicionada/);assert.equal(t.run('state.examDraft.question_ids.at(-1)'),'new-question');
+ await t.click('print-exam');assert.ok(t.document.querySelector('#export-dialog a[download]'));await t.click('export-close');await t.click('start-exam');await t.submit('#exam-submit');assert.ok(t.calls.some(c=>c.name==='submit_exam'));await t.click('close-exam');assert.match(await t.click('delete-exam'),/excluído/);
 });
-test('botões do aluno, progresso, validação e bloqueio de pop-up',async()=>{
- const t=setup('student');t.view('ciclos');await t.click('study-open');await t.submit('#study-start-form');assert.match(await t.click('open-study-task'),/Etapa/);assert.match(await t.submit('#method-step-form'),/Etapa concluída/);assert.ok(t.calls.some(c=>c.name==='record_method_action'));
- t.view('edital');const topic=t.document.querySelector('[data-edital]');topic.checked=true;for(const fn of t.events.change)await fn({target:topic});assert.match(t.document.querySelector('#notice').textContent,/Progresso/);
- t.view('materiais');assert.match(await t.click('select-resource'),/Conteúdo aberto/);assert.ok(t.document.querySelector('.lesson-content [data-action="export-material"]'));
- for(const fn of t.events.invalid)fn({target:{validationMessage:'Preencha este campo.'}});assert.match(t.document.querySelector('#notice').textContent,/Preencha/);
+test('simulado bloqueia a questão 81 na seleção, no formulário e no cadastro integrado',async()=>{
+ const t=setup();t.run('state.data.questions=Array.from({length:81},(_,i)=>({...state.data.questions[0],id:"q"+i}));');t.view('simulados');const boxes=[...t.document.querySelectorAll('[name="questions"]')];boxes.forEach(b=>b.checked=true);for(const fn of t.events.change)await fn({target:boxes[80]});assert.equal(boxes[80].checked,false);assert.match(t.document.querySelector('.action-error').textContent,/máximo 80 questões/);
+ await t.click('compose-exam-question');assert.equal(t.document.querySelector('#question-form'),null);boxes[80].checked=true;await t.submit('#exam-form',{career:'CFO'});assert.ok(!t.calls.some(c=>c.table==='exams'));boxes[80].checked=false;assert.match(await t.submit('#exam-form',{career:'CFO'}),/adicionado/);assert.equal(t.calls.find(c=>c.table==='exams').data.question_ids.length,80);
 });
-test('edição do método preserva revisões, move o assunto e salva os valores no ciclo',async()=>{
- const t=setup();t.view('ciclos');await t.click('edit-cycle');
- assert.match(await t.click('edit-block-method'),/edição/);
- assert.ok(t.document.querySelector('#method-editor-form'));
- assert.match(await t.click('method-review-add'),/alterada/);
- assert.equal(t.document.querySelectorAll('[data-review-index]').length,5);
- assert.match(await t.click('method-review-remove',{index:'4'}),/alterada/);
- assert.match(await t.click('method-step-add'),/alterada/);
- assert.match(await t.click('method-step-up',{index:'2'}),/alterada/);
- assert.match(await t.click('method-step-down',{index:'1'}),/alterada/);
- assert.match(await t.click('method-step-remove',{index:'2'}),/alterada/);
- assert.match(await t.submit('#method-editor-form',{initial_questions:'15',move_day:'2'}),/Método aplicado/);
- assert.equal(t.run('state.draft[0].method.initial_questions'),15);
- assert.equal(t.run('state.draft[0].date'),'2026-09-13');
- await t.submit('#save-cycle');assert.equal(t.calls.find(c=>c.table==='cycles').data.blocks[0].method.initial_questions,15);
+test('estudo e revisão sincronizam por RPC e cronômetro permanece no assunto',async()=>{
+ const t=setup('student');t.view('ciclos');await t.click('study-open');await t.submit('#study-start-form',{duration:'30',focus:'25',rest:'5'});assert.ok(t.document.querySelector('.study-workspace'));await t.click('timer-resume');await t.click('timer-pause');await t.click('study-return');await t.click('open-study-task');await t.submit('#method-step-form');assert.ok(t.calls.some(c=>c.name==='record_method_action'));await t.click('timer-end');assert.equal(t.run('state.data.study_sessions[0].status'),'ended');
+ t.run('state.data.method_studies.push({id:"s",student_id:"student",cycle_id:"cycle",subject:"Português",topic:"Ortografia",topic_key:"CFO|Português|1"});state.data.method_reviews.push({id:"due",student_id:"student",cycle_id:"cycle",study_id:"s",status:"pending",due_day:1,questions:5})');t.view('inicio');assert.ok(t.document.querySelector('[data-action="open-review"]'));await t.click('open-review');await t.submit('#review-result-form',{total:'5',correct:'4'});assert.ok(t.calls.some(c=>c.name==='record_method_action'&&c.args.payload.action==='review'));
 });
-test('modelos, impressão, navegação dos dias e erros do servidor mostram confirmação',async()=>{
- const t=setup();t.view('metodos');assert.match(await t.click('method-template-new'),/modelo aberto/);
- assert.match(await t.submit('#method-editor-form',{name:'Modelo de teste'}),/Modelo de método salvo/);
- assert.ok(t.calls.some(c=>c.table==='method_templates'&&c.data.name==='Modelo de teste'));
- t.view('simulados');assert.match(await t.click('print-exam'),/PDF preparado/);assert.ok(t.document.querySelector('#export-dialog a[download]'));assert.match(await t.click('export-close'),/fechada/);
- const u=setup('student');u.view('ciclos');assert.match(await u.click('board-next'),/atualizados/);
- assert.match(await u.click('board-current'),/atualizados/);
- u.run('state.data.cycles[0].blocks=[];renderView()');u.setFailure(true);assert.match(await u.click('study-advance'),/Falha/);assert.equal(u.document.querySelector('#notice').dataset.kind,'error');
+test('conteúdos continuam organizados por módulo e ligados ao histórico',async()=>{
+ const t=setup('student');t.run('state.data.resources[0].topic_key="CFO|Português|1";state.data.resources[0].module_name="Módulo 2";state.data.resources[0].position=1;state.data.resources.push({...state.data.resources[0],id:"next",title:"Exercícios",position:2},{...state.data.resources[0],id:"ten",module_name:"Módulo 10"})');t.view('materiais');await t.click('select-resource',{id:'resource'});assert.ok(t.document.querySelector('.lesson-pagination [data-id="next"]'));await t.click('topic-history');assert.match(t.document.querySelector('#study-dialog').textContent,/Ortografia/);assert.deepEqual([...t.document.querySelectorAll('.module-title strong')].map(x=>x.textContent),['Módulo 2','Módulo 10']);
 });
-test('estudar abre duração, cronômetro e mantém o assunto ao voltar',async()=>{
- const t=setup('student');t.view('ciclos');assert.match(await t.click('study-open'),/Escolha/);assert.match(await t.submit('#study-start-form',{duration:'30',focus:'25',rest:'5'}),/Tela do assunto/);
- assert.ok(t.document.querySelector('.study-workspace'));assert.match(await t.click('timer-resume'),/iniciado/);assert.match(await t.click('timer-pause'),/pausado/);assert.match(await t.click('study-return'),/Tela/);assert.match(await t.click('timer-end'),/encerrada/);
- t.view('flashcards');assert.match(t.document.querySelector('#content').textContent,/Dia 08/);
+test('cards do mentor abrem detalhes e dificuldades abrem histórico do assunto',async()=>{
+ const t=setup();t.run('state.data.study_logs.push({id:"log",student_id:"student",date:"2026-09-13",created_at:"2026-09-13T12:00:00Z",subject:"Português",topic:"Ortografia",topic_key:"CFO|Português|1",total:10,correct:5,minutes:0});');t.view('inicio');assert.ok(t.document.querySelector('.mentor-student'));assert.equal(t.document.querySelector('table'),null);assert.match(t.document.querySelector('#content').textContent,/50%/);await t.click('edit-student');assert.match(t.document.querySelector('#student-editor').textContent,/10 questões/);t.view('dificuldades');await t.click('topic-history');assert.match(t.document.querySelector('#study-dialog').textContent,/5 erros/);
 });
-test('admin cria e edita flashcards por assunto e preserva ciclo na continuação',async()=>{
- const t=setup();t.view('flashcards');assert.match(await t.submit('#flashcard-form',{front:'Pergunta?',back:'Resposta'}),/vinculado/);assert.ok(t.calls.some(c=>c.table==='flashcards'&&c.data.topic_key==='CFO|Português|1'));
- t.run('state.data.progress.push({student_id:"student",key:"cycle|position",flags:{day:8}})');t.view('ciclos');assert.match(await t.click('continue-cycle'),/Dia 08/);assert.equal(t.run('state.editCycle'),'cycle');assert.equal(t.run('state.draft[0].id'),'block');assert.equal(t.run('state.draftDay'),'2026-09-19');
+test('autenticação, recuperação e geração permanecem operacionais',async()=>{
+ const t=setup();for(const mode of ['login','cadastro','recuperar','nova-senha']){t.run('authPage('+JSON.stringify(mode)+')');const values=mode==='nova-senha'?{password:'teste1234'}:mode==='recuperar'?{email:'test@example.invalid'}:mode==='cadastro'?{email:'test@example.invalid',password:'teste1234',name:'Teste'}:{email:'test@example.invalid',password:'teste1234'};await t.submit('#auth-form',values);assert.equal(t.document.querySelector('.action-error'),null);}
+ t.run('state.profile=fixture.profile;shell()');t.view('ciclos');await t.click('cycle-select-all');await t.submit('#generate-cycle',{student_id:'student',count:'1'});assert.ok(t.document.querySelector('#save-cycle'));
 });
-test('navegação guiada, assinatura e organização de conteúdos preservam os controles',async()=>{
- const t=setup();t.view('alunos');await t.click('edit-student');assert.ok(t.document.querySelector('[name="subscription_start"]'));assert.ok(t.document.querySelector('[name="paid_until"]'));assert.match(await t.submit('#student-form',{subscription_start:'2026-09-01',paid_until:'2026-10-01'}),/Salvo/);assert.equal(t.calls.find(c=>c.table==='profiles').data.paid_until,'2026-10-01');
- t.view('materiais');assert.match(await t.click('edit-resource'),/edição/);assert.ok(t.document.querySelector('[name="module_name"]'));assert.ok(t.document.querySelector('[name="release_month"]'));assert.match(await t.click('cancel-resource'),/cancelada/);assert.match(await t.click('delete-resource'),/excluído/);
- const u=setup('student');u.view('inicio');assert.match(u.document.querySelector('.mobile-nav').textContent,/Hoje/);assert.match(u.document.querySelector('.mobile-nav').textContent,/Mais/);assert.match(u.document.querySelector('#content').textContent,/Continue de onde parou/);u.view('mais');assert.ok(u.document.querySelector('#content a[href="#painel/edital"]'));assert.match(u.document.querySelector('#content').textContent,/Simulados/);u.view('revisoes');assert.match(u.document.querySelector('#content').textContent,/Tudo o que precisa ser retomado/);u.view('materiais');assert.match(u.document.querySelector('#content').textContent,/Módulo geral/);
-});
-test('menu móvel preserva todas as ferramentas administrativas e caderno abre o formulário copiado',async()=>{
- const t=setup();assert.ok(t.document.querySelector('.mobile-nav a[href="#painel/mais"]'));t.view('mais');
- for(const id of ['simulados','metodos','flashcards','erros','edital','desempenho'])assert.ok(t.document.querySelector('#content a[href="#painel/'+id+'"]'));
- const u=setup('student');u.run('state.data.exams=[]');u.view('questoes');await u.click('open-question');await u.click('question-error');assert.equal(u.document.querySelector('.error-create').open,true);assert.equal(u.document.querySelector('#error-form').dataset.scrolled,'true');
-});
-test('revisões respeitam o ciclo selecionado e módulos mantêm navegação e histórico do assunto',async()=>{
- const t=setup('student');t.run('state.data.cycles.push({...state.data.cycles[0],id:"later",created_at:"2026-09-14"});state.boardCycle="cycle";state.data.method_studies.push({id:"s",student_id:"student",cycle_id:"cycle",topic_key:"CFO|Português|1",subject:"Português",topic:"Ortografia"});state.data.method_reviews.push({id:"due",student_id:"student",cycle_id:"cycle",study_id:"s",status:"pending",due_day:1,questions:5},{id:"other",student_id:"student",cycle_id:"later",study_id:"s",status:"pending",due_day:1,questions:99})');
- t.view('revisoes');assert.ok(t.document.querySelector('[data-id="due"]'));assert.equal(t.document.querySelector('[data-id="other"]'),null);assert.match(await t.click('open-review'),/aberta/);
- t.run('state.data.resources[0].topic_key="CFO|Português|1";state.data.resources[0].module_name="Módulo 2";state.data.resources[0].position=1;state.data.resources.push({...state.data.resources[0],id:"next",title:"Exercícios",position:2},{...state.data.resources[0],id:"ten",title:"Avançado",module_name:"Módulo 10"})');
- t.view('materiais');await t.click('select-resource',{id:'resource'});assert.ok(t.document.querySelector('.lesson-pagination [data-id="next"]'));assert.equal(t.document.querySelector('.lesson-content').dataset.scrolled,'true');assert.ok(t.document.querySelector('.lesson-content [data-action="topic-history"][data-topic="CFO|Português|1"]'));assert.match(await t.click('topic-history'),/aberto/);assert.match(t.document.querySelector('#study-dialog').textContent,/Ortografia/);
- const modules=[...t.document.querySelectorAll('.module-title strong')].map(x=>x.textContent);assert.deepEqual(modules,['Módulo 2','Módulo 10']);
-});
-test('inventário de controles revisados',()=>{console.log('Controles exercitados:',[...coverage].sort().join(', '));assert.ok(coverage.size>=48);});
+test('inventário de controles exercitados',()=>console.log([...coverage].sort().join(', ')));

@@ -43,7 +43,7 @@ test('login redesenha o painel mesmo quando o endereço já é painel/inicio',as
  vm.runInContext(source,context);
  await handlers.submit[0]({preventDefault(){},target:{id:'auth-form',dataset:{mode:'login'},append(){}},submitter:element()});
  assert.match(elements.get('#app').innerHTML,/Alunos e acessos/);
- assert.match(elements.get('#content').innerHTML,/Sua mentoria, por inteiro/);
+ assert.match(elements.get('#content').innerHTML,/Acompanhamento dos alunos/);
 });
 test('dias numerados preservam a sequência, inclusive virada do mês',()=>{
  assert.equal(studyTools.dayLabel('2026-10-01','2026-09-30'),'Dia 02');

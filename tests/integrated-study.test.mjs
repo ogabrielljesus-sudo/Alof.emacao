@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {sessionClock,visibleSteps,dayTasks,flashScore} from '../dist/study-state.js';
+import {sessionClock,visibleSteps,dayTasks} from '../dist/study-state.js';
 import {extendCycle} from '../dist/cycle-plan.js';
 import {makePdf,stampMaterial,setExportFont} from '../dist/pdf-export.js';
 import {PDFDocument,PDFName} from '../dist/vendor/pdf-lib.js';
@@ -14,9 +14,9 @@ test('relógio exclui descanso, limita ausência e para no fim da etapa',()=>{
  assert.equal(sessionClock({...s,status:'paused'},10000,0).focused,55);
  assert.equal(sessionClock({...s,phase_seconds:0,focused_seconds:0,focus_seconds:1500},1000000,0).focused,30);
 });
-test('flashcards dependem da semana, do assunto estudado e da existência de cartões',()=>{
+test('etapas removidas não bloqueiam alunos antigos em nenhuma semana',()=>{
  assert.equal(visibleSteps(c,c.blocks[0],d).length,1);
- const b={...c.blocks[0],date:'2026-01-08'};assert.equal(visibleSteps(c,b,d).length,2);
+ const b={...c.blocks[0],date:'2026-01-08'};assert.equal(visibleSteps(c,b,d).length,1);
  assert.equal(visibleSteps(c,b,{...d,method_studies:[]}).length,1);
  assert.equal(visibleSteps(c,b,{...d,flashcards:[]}).length,1);
  assert.equal(visibleSteps(c,b,{...d,profiles:[{id:'s',plan:'Básico'}]}).length,1);
@@ -24,8 +24,7 @@ test('flashcards dependem da semana, do assunto estudado e da existência de car
 test('progresso do dia não soma de novo tarefas já concluídas nos dias anteriores',()=>{
  assert.equal(dayTasks(c,d).length,0);
  const reviews=[{id:'r',study_id:'ms',cycle_id:'c',review_key:'r3',due_day:8,status:'completed'}];
- const tasks=dayTasks(c,{...d,method_reviews:reviews});assert.equal(tasks.length,2);assert.equal(tasks.filter(t=>t.done).length,1);
- assert.deepEqual(flashScore([{answers:{a:'correct',b:'wrong',c:'forgot'}}]),{total:3,correct:1,wrong:1,forgot:1});
+ const tasks=dayTasks(c,{...d,method_reviews:reviews});assert.equal(tasks.length,1);assert.equal(tasks.filter(t=>t.done).length,1);
 });
 test('ampliação mantém identificadores, ordem por dia e configuração do mentor',()=>{
  const cycle={...c,duration_days:2,blocks:[c.blocks[0],{...c.blocks[0],id:'b2',date:'2026-01-02',topic:'Frações',topic_key:'CFO|Matemática|2',minutes:90}]};
